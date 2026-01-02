@@ -1,0 +1,79 @@
+# ===============================
+# Node / TypeScript / NestJS
+# ===============================
+
+# Node modules
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# TypeScript cache
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Prisma
+prisma/*.db
+prisma/migrations/
+prisma/dev.db-journal
+node_modules/.prisma/
+
+# Compiled JavaScript
+*.js.map
+*.d.ts
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Debugger and temporary files
+.tmp/
+temp/
+.cache/
+
+# Optional lock files (keep one only)
+# yarn.lock
+# pnpm-lock.yaml
+# package-lock.json
+
+# Docker / deployment artifacts
+docker-compose.override.yml
+Dockerfile.local
+*.tar
+
+# VSCode workspace
+*.code-workspace
+
+# ===============================
+# Custom project patterns
+# ===============================
+
+# Ignore uploaded files or temp assets if any
+uploads/
+storage/
