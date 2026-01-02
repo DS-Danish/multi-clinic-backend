@@ -34,6 +34,21 @@ async function main() {
   const { faker } = await import("@faker-js/faker");  // ✅ dynamic import
   console.log("🌱 Starting seeding with realistic healthcare data...");
 
+  // Clean existing data
+  console.log("🧹 Cleaning existing data...");
+  await prisma.payment.deleteMany();
+  await prisma.bill.deleteMany();
+  await prisma.appointment.deleteMany();
+  await prisma.report.deleteMany();
+  await prisma.clinicDoctorSpeciality.deleteMany();
+  await prisma.clinicReceptionist.deleteMany();
+  await prisma.clinicDoctor.deleteMany();
+  await prisma.clinicSpeciality.deleteMany();
+  await prisma.clinic.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.speciality.deleteMany();
+  console.log("✅ Database cleaned");
+
   // ---------- Specialities ----------
   const specialityNames = [
     "Cardiology",
@@ -55,6 +70,7 @@ async function main() {
 
   await prisma.speciality.createMany({
     data: specialityNames.map((name) => ({ name })),
+    skipDuplicates: true,
   });
 
   const specialityList = await prisma.speciality.findMany();
@@ -187,7 +203,7 @@ async function main() {
       data: {
         name: `${firstName} ${lastName}`,
         email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${faker.number.int({ min: 1, max: 999 })}@email.com`,
-        phone: faker.phone.number('###-###-####'),
+        phone: faker.phone.number(),
         isActive: true,
         role: Role.PATIENT,
         password: hashedPassword,

@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
+import { TimezoneUtil } from 'src/common/utils/timezone.util';
 
 @Injectable()
 export class AppointmentService {
@@ -39,8 +40,10 @@ export class AppointmentService {
       throw new BadRequestException('This doctor does not work at this clinic');
     }
 
-    const startTime = new Date(dto.startTime);
-    const endTime = new Date(dto.endTime);
+    // Convert client timezone to UTC for database storage
+    const timezone = dto.timezone || TimezoneUtil.DEFAULT_TIMEZONE;
+    const startTime = TimezoneUtil.toUTC(dto.startTime, timezone);
+    const endTime = TimezoneUtil.toUTC(dto.endTime, timezone);
 
     // 1️⃣ Exact-time conflict
     const existing = await this.prisma.appointment.findFirst({
@@ -48,6 +51,7 @@ export class AppointmentService {
         doctorId: dto.doctorId,
         clinicId: dto.clinicId,
         startTime,
+        status: { not: 'CANCELLED' },
       },
     });
 
@@ -62,6 +66,7 @@ export class AppointmentService {
       where: {
         doctorId: dto.doctorId,
         clinicId: dto.clinicId,
+        status: { not: 'CANCELLED' },
         AND: [
           { startTime: { lt: endTime } },
           { endTime: { gt: startTime } },
@@ -76,7 +81,7 @@ export class AppointmentService {
     }
 
     // 3️⃣ Create appointment
-    return this.prisma.appointment.create({
+    const appointment = await this.prisma.appointment.create({
       data: {
         clinicId: dto.clinicId,
         doctorId: dto.doctorId,
@@ -87,12 +92,21 @@ export class AppointmentService {
         status: 'PENDING', // Patient-created appointments start as PENDING
       },
     });
+
+    // Return with timezone-aware dates
+    return {
+      ...appointment,
+      startTime: TimezoneUtil.fromUTC(appointment.startTime, timezone),
+      endTime: TimezoneUtil.fromUTC(appointment.endTime, timezone),
+    };
   }
 
   // -----------------------------------
   // Doctor appointments
   // -----------------------------------
-  async getDoctorAppointments(doctorId: string) {
+  async getDoctorAppointments(doctorId: string, timezone?: string) {
+    const clientTimezone = timezone || TimezoneUtil.DEFAULT_TIMEZONE;
+    
     const appointments = await this.prisma.appointment.findMany({
       where: { 
         doctorId,
@@ -111,8 +125,8 @@ export class AppointmentService {
       id: a.id,
       patientName: a.patient.name,
       clinicName: a.clinic.name,
-      startTime: a.startTime,
-      endTime: a.endTime,
+      startTime: TimezoneUtil.fromUTC(a.startTime, clientTimezone),
+      endTime: TimezoneUtil.fromUTC(a.endTime, clientTimezone),
       status: a.status,
       notes: a.notes,
       priority: a.priority,
@@ -122,7 +136,9 @@ export class AppointmentService {
   // -----------------------------------
   // Patient appointments
   // -----------------------------------
-  async getPatientAppointments(patientId: string) {
+  async getPatientAppointments(patientId: string, timezone?: string) {
+    const clientTimezone = timezone || TimezoneUtil.DEFAULT_TIMEZONE;
+    
     const appointments = await this.prisma.appointment.findMany({
       where: { patientId },
       orderBy: { startTime: 'asc' },
@@ -136,8 +152,8 @@ export class AppointmentService {
       id: a.id,
       doctorName: a.doctor.name,
       clinicName: a.clinic.name,
-      startTime: a.startTime,
-      endTime: a.endTime,
+      startTime: TimezoneUtil.fromUTC(a.startTime, clientTimezone),
+      endTime: TimezoneUtil.fromUTC(a.endTime, clientTimezone),
       status: a.status,
       notes: a.notes,
       priority: a.priority,
@@ -169,7 +185,9 @@ export class AppointmentService {
   // -----------------------------------
   // Cancel Patient Appointment
   // -----------------------------------
-  async cancelPatientAppointment(appointmentId: string, patientId: string) {
+  async cancelPatientAppointment(appointmentId: string, patientId: string, timezone?: string) {
+    const clientTimezone = timezone || TimezoneUtil.DEFAULT_TIMEZONE;
+    
     // Find the appointment
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -200,7 +218,7 @@ export class AppointmentService {
     }
 
     // Update appointment status to cancelled
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: { status: 'CANCELLED' },
       include: {
@@ -208,6 +226,12 @@ export class AppointmentService {
         clinic: true,
       },
     });
+
+    return {
+      ...updated,
+      startTime: TimezoneUtil.fromUTC(updated.startTime, clientTimezone),
+      endTime: TimezoneUtil.fromUTC(updated.endTime, clientTimezone),
+    };
   }
 
   // -----------------------------------
@@ -246,8 +270,14 @@ export class AppointmentService {
       throw new BadRequestException('Cannot update a completed appointment');
     }
 
-    const startTime = dto.startTime ? new Date(dto.startTime) : appointment.startTime;
-    const endTime = dto.endTime ? new Date(dto.endTime) : appointment.endTime;
+    // Convert client timezone to UTC for database storage
+    const timezone = dto.timezone || TimezoneUtil.DEFAULT_TIMEZONE;
+    const startTime = dto.startTime 
+      ? TimezoneUtil.toUTC(dto.startTime, timezone) 
+      : appointment.startTime;
+    const endTime = dto.endTime 
+      ? TimezoneUtil.toUTC(dto.endTime, timezone) 
+      : appointment.endTime;
 
     // If time is being updated, check for conflicts
     if (dto.startTime || dto.endTime) {
@@ -257,6 +287,7 @@ export class AppointmentService {
           doctorId: appointment.doctorId,
           clinicId: appointment.clinicId,
           startTime,
+          status: { not: 'CANCELLED' },
           id: { not: appointmentId },
         },
       });
@@ -272,6 +303,7 @@ export class AppointmentService {
         where: {
           doctorId: appointment.doctorId,
           clinicId: appointment.clinicId,
+          status: { not: 'CANCELLED' },
           id: { not: appointmentId },
           AND: [
             { startTime: { lt: endTime } },
@@ -288,11 +320,11 @@ export class AppointmentService {
     }
 
     // Update appointment
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: { id: appointmentId },
       data: {
-        startTime: dto.startTime ? new Date(dto.startTime) : undefined,
-        endTime: dto.endTime ? new Date(dto.endTime) : undefined,
+        startTime: dto.startTime ? startTime : undefined,
+        endTime: dto.endTime ? endTime : undefined,
         notes: dto.notes ?? undefined,
       },
       include: {
@@ -300,5 +332,11 @@ export class AppointmentService {
         clinic: true,
       },
     });
+
+    return {
+      ...updated,
+      startTime: TimezoneUtil.fromUTC(updated.startTime, timezone),
+      endTime: TimezoneUtil.fromUTC(updated.endTime, timezone),
+    };
   }
 }

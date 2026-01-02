@@ -16,4 +16,8 @@ export class CreateAppointmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string; // Client timezone (e.g., 'Asia/Karachi')
 }

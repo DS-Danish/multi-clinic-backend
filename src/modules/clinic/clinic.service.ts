@@ -2,6 +2,7 @@ import { Injectable, ConflictException, BadRequestException, NotFoundException }
 import { PrismaService } from 'src/database/prisma.service';
 import { CreateClinicDto } from './dto/create-clinic.dto';
 import { AddReceptionistDto } from './dto/add-receptionist.dto';
+import { AddDoctorDto } from './dto/add-doctor.dto';
 import { EmailService } from '../email/email.service';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -218,5 +219,243 @@ export class ClinicService {
         role: receptionist.role,
       },
     };
+  }
+
+  // ✔ Add doctor to clinic
+  async addDoctor(clinicId: string, dto: AddDoctorDto, adminId: string) {
+    // Verify clinic exists and user is admin of this clinic
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+    });
+
+    if (!clinic) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    if (clinic.adminId !== adminId) {
+      throw new BadRequestException('Only the clinic admin can add doctors');
+    }
+
+    // Check if email already exists
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    // If specialityIds provided, verify they exist
+    if (dto.specialityIds && dto.specialityIds.length > 0) {
+      const specialities = await this.prisma.speciality.findMany({
+        where: {
+          id: { in: dto.specialityIds },
+        },
+      });
+
+      if (specialities.length !== dto.specialityIds.length) {
+        throw new BadRequestException('One or more speciality IDs are invalid');
+      }
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    // Create doctor user and link to clinic in a transaction
+    const result = await this.prisma.$transaction(async (prisma) => {
+      // Create doctor user
+      const doctor = await prisma.user.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          phone: dto.phone || null,
+          password: hashedPassword,
+          role: Role.DOCTOR,
+          emailVerified: true,
+          isActive: true,
+        },
+      });
+
+      // Link doctor to clinic
+      const clinicDoctor = await prisma.clinicDoctor.create({
+        data: {
+          clinicId: clinicId,
+          doctorId: doctor.id,
+        },
+      });
+
+      // If specialities provided, link them
+      if (dto.specialityIds && dto.specialityIds.length > 0) {
+        await prisma.clinicDoctorSpeciality.createMany({
+          data: dto.specialityIds.map((specialityId) => ({
+            clinicDoctorId: clinicDoctor.id,
+            specialityId,
+          })),
+        });
+      }
+
+      return doctor;
+    });
+
+    return {
+      message: 'Doctor added successfully',
+      doctor: {
+        id: result.id,
+        name: result.name,
+        email: result.email,
+        phone: result.phone,
+        role: result.role,
+      },
+    };
+  }
+
+  // Get all doctors for a clinic
+  async getClinicDoctors(clinicId: string) {
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+      include: {
+        doctors: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                isActive: true,
+              },
+            },
+            specialties: {
+              include: {
+                speciality: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!clinic) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    return clinic.doctors.map((cd) => ({
+      id: cd.doctor.id,
+      name: cd.doctor.name,
+      email: cd.doctor.email,
+      phone: cd.doctor.phone,
+      isActive: cd.doctor.isActive,
+      specialties: cd.specialties.map((s) => ({
+        id: s.speciality.id,
+        name: s.speciality.name,
+      })),
+    }));
+  }
+
+  // Get all patients for a clinic (patients with appointments at this clinic)
+  async getClinicPatients(clinicId: string) {
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+    });
+
+    if (!clinic) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    // Get unique patients who have appointments at this clinic
+    const appointments = await this.prisma.appointment.findMany({
+      where: { clinicId },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            isActive: true,
+            createdAt: true,
+          },
+        },
+      },
+      distinct: ['patientId'],
+    });
+
+    return appointments.map((a) => a.patient);
+  }
+
+  // Get all appointments for a clinic
+  async getClinicAppointments(clinicId: string) {
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+    });
+
+    if (!clinic) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: { clinicId },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'desc',
+      },
+    });
+
+    return appointments;
+  }
+
+  // Get all receptionists for a clinic
+  async getClinicReceptionists(clinicId: string) {
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+      include: {
+        receptionists: {
+          include: {
+            receptionist: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                isActive: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!clinic) {
+      throw new NotFoundException('Clinic not found');
+    }
+
+    return clinic.receptionists.map((cr) => ({
+      id: cr.receptionist.id,
+      name: cr.receptionist.name,
+      email: cr.receptionist.email,
+      phone: cr.receptionist.phone,
+      isActive: cr.receptionist.isActive,
+    }));
   }
 }

@@ -130,6 +130,7 @@ export class ReceptionistService {
         doctorId: dto.doctorId,
         clinicId,
         startTime,
+        status: { not: 'CANCELLED' },
       },
     });
 
@@ -144,6 +145,7 @@ export class ReceptionistService {
       where: {
         doctorId: dto.doctorId,
         clinicId,
+        status: { not: 'CANCELLED' },
         AND: [{ startTime: { lt: endTime } }, { endTime: { gt: startTime } }],
       },
     });
@@ -313,6 +315,7 @@ export class ReceptionistService {
           doctorId: appointment.doctorId,
           clinicId,
           startTime,
+          status: { not: 'CANCELLED' },
           id: { not: id },
         },
       });
@@ -328,6 +331,7 @@ export class ReceptionistService {
         where: {
           doctorId: appointment.doctorId,
           clinicId,
+          status: { not: 'CANCELLED' },
           id: { not: id },
           AND: [
             { startTime: { lt: endTime } },

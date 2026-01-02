@@ -49,20 +49,27 @@ export class AppointmentController {
   async cancelAppointment(
     @Param('id') id: string,
     @GetUser('userId') userId: string,
+    @Query('timezone') timezone?: string,
   ) {
-    return this.appointmentService.cancelPatientAppointment(id, userId);
+    return this.appointmentService.cancelPatientAppointment(id, userId, timezone);
   }
 
   // Doctor's appointments
   @Get('doctor/:doctorId')
-  async getDoctorAppointments(@Param('doctorId') doctorId: string) {
-    return this.appointmentService.getDoctorAppointments(doctorId);
+  async getDoctorAppointments(
+    @Param('doctorId') doctorId: string,
+    @Query('timezone') timezone?: string,
+  ) {
+    return this.appointmentService.getDoctorAppointments(doctorId, timezone);
   }
 
   // Patient's appointments
   @Get('patient/:patientId')
-  async getPatientAppointments(@Param('patientId') patientId: string) {
-    return this.appointmentService.getPatientAppointments(patientId);
+  async getPatientAppointments(
+    @Param('patientId') patientId: string,
+    @Query('timezone') timezone?: string,
+  ) {
+    return this.appointmentService.getPatientAppointments(patientId, timezone);
   }
 
   // All appointments (admin/receptionist)
