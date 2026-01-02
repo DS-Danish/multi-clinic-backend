@@ -40,7 +40,6 @@ tsconfig.tsbuildinfo
 
 # Prisma
 prisma/*.db
-prisma/migrations/
 prisma/dev.db-journal
 node_modules/.prisma/
 
