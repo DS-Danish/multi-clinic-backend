@@ -157,12 +157,13 @@ model Appointment {
   priority  String?
   notes     String?
 
-  clinic        Clinic         @relation(fields: [clinicId], references: [id])
-  doctor        User           @relation(name: "DoctorAppointments", fields: [doctorId], references: [id])
-  patient       User           @relation(name: "PatientAppointments", fields: [patientId], references: [id])
-  payments      Payment[]
-  notifications Notification[]
-  bills         Bill[]
+  clinic            Clinic              @relation(fields: [clinicId], references: [id])
+  doctor            User                @relation(name: "DoctorAppointments", fields: [doctorId], references: [id])
+  patient           User                @relation(name: "PatientAppointments", fields: [patientId], references: [id])
+  payments          Payment[]
+  notifications     Notification[]
+  bills             Bill[]
+  appointmentReport AppointmentReport?
 
   @@index([clinicId, doctorId, startTime])
   @@map("appointments")
@@ -269,4 +270,23 @@ model ActivationToken {
   user User @relation(fields: [userId], references: [id])
 
   @@map("activation_tokens")
+}
+
+model AppointmentReport {
+  id            String   @id @default(uuid())
+  appointmentId String   @unique
+  doctorId      String
+  title         String
+  content       String   @db.Text
+  diagnosis     String?  @db.Text
+  prescription  String?  @db.Text
+  recommendations String? @db.Text
+  fileUrl       String?
+  
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("appointment_reports")
 }

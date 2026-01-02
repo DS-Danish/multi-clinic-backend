@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/database/prisma.service';
 import { TimezoneUtil } from 'src/common/utils/timezone.util';
+import { CreateReportDto } from './dto/create-report.dto';
+import { UpdateReportDto } from './dto/update-report.dto';
 
 @Injectable()
 export class AppointmentService {
@@ -118,6 +120,7 @@ export class AppointmentService {
       include: {
         patient: true,
         clinic: true,
+        appointmentReport: true,
       },
     });
 
@@ -130,6 +133,7 @@ export class AppointmentService {
       status: a.status,
       notes: a.notes,
       priority: a.priority,
+      report: a.appointmentReport,
     }));
   }
 
@@ -145,6 +149,7 @@ export class AppointmentService {
       include: {
         doctor: true,
         clinic: true,
+        appointmentReport: true,
       },
     });
 
@@ -157,6 +162,7 @@ export class AppointmentService {
       status: a.status,
       notes: a.notes,
       priority: a.priority,
+      report: a.appointmentReport,
     }));
   }
 
@@ -337,6 +343,274 @@ export class AppointmentService {
       ...updated,
       startTime: TimezoneUtil.fromUTC(updated.startTime, timezone),
       endTime: TimezoneUtil.fromUTC(updated.endTime, timezone),
+    };
+  }
+
+  // -----------------------------------
+  // APPOINTMENT REPORTS
+  // -----------------------------------
+
+  // Create or update report for an appointment (doctor only)
+  async createAppointmentReport(
+    appointmentId: string,
+    doctorId: string,
+    dto: CreateReportDto,
+  ) {
+    // Verify appointment exists
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        appointmentReport: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Verify doctor is the one assigned to this appointment
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(
+        'You can only create reports for your own appointments',
+      );
+    }
+
+    // Check if report already exists
+    if (appointment.appointmentReport) {
+      throw new BadRequestException(
+        'Report already exists for this appointment. Use update endpoint instead.',
+      );
+    }
+
+    // Create the report
+    const report = await this.prisma.appointmentReport.create({
+      data: {
+        appointmentId,
+        doctorId,
+        title: dto.title,
+        content: dto.content,
+        diagnosis: dto.diagnosis,
+        prescription: dto.prescription,
+        recommendations: dto.recommendations,
+        fileUrl: dto.fileUrl,
+      },
+    });
+
+    return report;
+  }
+
+  // Update existing report
+  async updateAppointmentReport(
+    appointmentId: string,
+    doctorId: string,
+    dto: UpdateReportDto,
+  ) {
+    // Verify appointment and report exist
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        appointmentReport: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    if (!appointment.appointmentReport) {
+      throw new NotFoundException('No report found for this appointment');
+    }
+
+    // Verify doctor is the one assigned to this appointment
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(
+        'You can only update reports for your own appointments',
+      );
+    }
+
+    // Update the report
+    const report = await this.prisma.appointmentReport.update({
+      where: { appointmentId },
+      data: {
+        title: dto.title,
+        content: dto.content,
+        diagnosis: dto.diagnosis,
+        prescription: dto.prescription,
+        recommendations: dto.recommendations,
+        fileUrl: dto.fileUrl,
+      },
+    });
+
+    return report;
+  }
+
+  // Get report for an appointment (accessible by doctor and patient)
+  async getAppointmentReport(appointmentId: string, userId: string) {
+    // Verify appointment exists
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        appointmentReport: true,
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        patient: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    // Verify user is either the doctor or patient of this appointment
+    if (
+      appointment.doctorId !== userId &&
+      appointment.patientId !== userId
+    ) {
+      throw new ForbiddenException(
+        'You can only view reports for your own appointments',
+      );
+    }
+
+    if (!appointment.appointmentReport) {
+      throw new NotFoundException('No report found for this appointment');
+    }
+
+    return {
+      ...appointment.appointmentReport,
+      appointment: {
+        id: appointment.id,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        status: appointment.status,
+        doctor: appointment.doctor,
+        patient: appointment.patient,
+      },
+    };
+  }
+
+  // Get all reports for a patient
+  async getPatientReports(patientId: string) {
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        patientId,
+        appointmentReport: {
+          isNot: null,
+        },
+      },
+      include: {
+        appointmentReport: true,
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        clinic: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        startTime: 'desc',
+      },
+    });
+
+    return appointments.map((appt) => ({
+      appointmentId: appt.id,
+      appointmentDate: appt.startTime,
+      doctor: appt.doctor,
+      clinic: appt.clinic,
+      report: appt.appointmentReport,
+    }));
+  }
+
+  // Get all reports created by a doctor
+  async getDoctorReports(doctorId: string) {
+    const reports = await this.prisma.appointmentReport.findMany({
+      where: { doctorId },
+      include: {
+        appointment: {
+          include: {
+            patient: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            clinic: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return reports.map((report) => ({
+      reportId: report.id,
+      appointmentId: report.appointmentId,
+      appointmentDate: report.appointment.startTime,
+      patient: report.appointment.patient,
+      clinic: report.appointment.clinic,
+      title: report.title,
+      createdAt: report.createdAt,
+      updatedAt: report.updatedAt,
+    }));
+  }
+
+  // Delete appointment report (doctor only)
+  async deleteAppointmentReport(appointmentId: string, doctorId: string) {
+    // Verify appointment and report exist
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        appointmentReport: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    if (!appointment.appointmentReport) {
+      throw new NotFoundException('No report found for this appointment');
+    }
+
+    // Verify doctor is the one who created the report
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException(
+        'You can only delete reports for your own appointments',
+      );
+    }
+
+    // Delete the report
+    await this.prisma.appointmentReport.delete({
+      where: { appointmentId },
+    });
+
+    return {
+      message: 'Report deleted successfully',
+      appointmentId,
     };
   }
 }

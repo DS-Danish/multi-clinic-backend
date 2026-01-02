@@ -23,6 +23,30 @@
 
 ## Description
 
+Multi-Clinic Backend System - A comprehensive NestJS application for managing multiple medical clinics, appointments, doctors, patients, and medical reports.
+
+### Key Features
+
+- 🏥 **Multi-Clinic Management** - Support for multiple clinics with separate administrators
+- 👨‍⚕️ **Doctor & Patient Portal** - Role-based access control for doctors, patients, clinic admins, and receptionists
+- 📅 **Appointment Scheduling** - Complete appointment booking and management system
+- 📝 **Medical Reports** - Doctors can upload comprehensive appointment reports that patients can view
+- 🔐 **Email Verification** - Secure user registration with email verification
+- 🌍 **Timezone Support** - Proper handling of appointments across different timezones
+- 💳 **Billing System** - Appointment billing and payment tracking
+
+### Feature Guides
+
+- [📋 Appointment Reports API Guide](./APPOINTMENT_REPORTS_API_GUIDE.md) - Complete guide for uploading and managing medical reports
+- [⚡ Quick Reference - Reports](./QUICK_REFERENCE_REPORTS.md) - Quick start guide for appointment reports
+- [📧 Email Verification Guide](./EMAIL_VERIFICATION_GUIDE.md)
+- [🕐 Timezone Implementation](./TIMEZONE_GUIDE.md)
+- [🏥 Clinic Creation Guide](./CLINIC_CREATION_GUIDE.md)
+
+---
+
+## Description
+
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
 ## Project setup
