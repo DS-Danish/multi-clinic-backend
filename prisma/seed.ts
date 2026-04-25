@@ -1,11 +1,43 @@
-import { AppointmentStatus, Clinic, PrismaClient, Role, User } from "@prisma/client";
-import bcrypt from "bcrypt";
+import { PrismaClient } from "@prisma/client";
+import * as bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
 const PAKISTANI_FIRST_NAMES = {
-  male: ["Muhammad", "Ahmed", "Ali", "Hassan", "Hussain", "Bilal", "Usman", "Hamza", "Abdullah", "Saad", "Fahad", "Talha", "Adeel", "Owais", "Zain"],
-  female: ["Ayesha", "Fatima", "Maryam", "Zainab", "Sana", "Hira", "Iqra", "Mahnoor", "Rabia", "Kiran", "Hafsa", "Laiba", "Noor", "Amna", "Mehwish"],
+  male: [
+    "Muhammad",
+    "Ahmed",
+    "Ali",
+    "Hassan",
+    "Hussain",
+    "Bilal",
+    "Usman",
+    "Hamza",
+    "Abdullah",
+    "Saad",
+    "Fahad",
+    "Talha",
+    "Adeel",
+    "Owais",
+    "Zain",
+  ],
+  female: [
+    "Ayesha",
+    "Fatima",
+    "Maryam",
+    "Zainab",
+    "Sana",
+    "Hira",
+    "Iqra",
+    "Mahnoor",
+    "Rabia",
+    "Kiran",
+    "Hafsa",
+    "Laiba",
+    "Noor",
+    "Amna",
+    "Mehwish",
+  ],
 } as const;
 
 const PAKISTANI_LAST_NAMES = [
@@ -26,7 +58,68 @@ const PAKISTANI_LAST_NAMES = [
   "Iqbal",
 ] as const;
 
+const COMMON_CONDITIONS = [
+  "Hypertension",
+  "Type 2 Diabetes",
+  "Asthma",
+  "COPD",
+  "Arthritis",
+  "Depression",
+  "Anxiety",
+  "Migraine",
+  "Back Pain",
+  "Heart Disease",
+  "Allergies",
+  "Thyroid Disorder",
+  "High Cholesterol",
+  "Obesity",
+  "Sleep Apnea",
+] as const;
+
+const REALISTIC_CLINICS = [
+  { name: "St. Mary's Medical Center", city: "Wah Cantt" },
+  { name: "Johns Hopkins Community Health", city: "Rawalpindi" },
+  { name: "Mayo Clinic Satellite", city: "Islamabad" },
+  { name: "Cleveland Clinic Express", city: "Wah Cantt" },
+  { name: "Mass General Health Center", city: "Rawalpindi" },
+  { name: "Cedar-Sinai Outpatient", city: "Islamabad" },
+  { name: "Northwestern Medicine Center", city: "Wah Cantt" },
+  { name: "UCSF Health Plaza", city: "Rawalpindi" },
+  { name: "Houston Methodist Clinic", city: "Wah Cantt" },
+  { name: "Duke Health Center", city: "Islamabad" },
+] as const;
+
 type SeedGender = keyof typeof PAKISTANI_FIRST_NAMES;
+type RoleValue =
+  | "SYSTEM_ADMIN"
+  | "CLINIC_ADMIN"
+  | "DOCTOR"
+  | "PATIENT"
+  | "RECEPTIONIST";
+type AppointmentStatusValue =
+  | "PENDING"
+  | "SCHEDULED"
+  | "COMPLETED"
+  | "CANCELLED";
+type BillStatusValue = "PAID" | "UNPAID";
+
+type CreatedClinic = {
+  id: string;
+  name: string;
+};
+
+type CreatedPatient = {
+  id: string;
+};
+
+type SpecialityRef = {
+  id: string;
+};
+
+type ClinicWithDoctors = {
+  id: string;
+  doctors: Array<{ doctorId: string }>;
+};
 
 function pickRandom<T>(values: readonly T[]): T {
   return values[Math.floor(Math.random() * values.length)];
@@ -36,7 +129,14 @@ function toEmailPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function generatePakistaniIdentity(gender: SeedGender) {
+function generatePakistaniIdentity(
+  gender: SeedGender,
+): {
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  emailHandle: string;
+} {
   const firstName = pickRandom(PAKISTANI_FIRST_NAMES[gender]);
   const lastName = pickRandom(PAKISTANI_LAST_NAMES);
 
@@ -48,29 +148,25 @@ function generatePakistaniIdentity(gender: SeedGender) {
   };
 }
 
-const COMMON_CONDITIONS = [
-  "Hypertension", "Type 2 Diabetes", "Asthma", "COPD", "Arthritis",
-  "Depression", "Anxiety", "Migraine", "Back Pain", "Heart Disease",
-  "Allergies", "Thyroid Disorder", "High Cholesterol", "Obesity", "Sleep Apnea"
-];
+function asRole(role: RoleValue): RoleValue {
+  return role;
+}
 
-const REALISTIC_CLINICS = [
-  { name: "St. Mary's Medical Center", city: "New York" },
-  { name: "Johns Hopkins Community Health", city: "Baltimore" },
-  { name: "Mayo Clinic Satellite", city: "Rochester" },
-  { name: "Cleveland Clinic Express", city: "Cleveland" },
-  { name: "Mass General Health Center", city: "Boston" },
-  { name: "Cedar-Sinai Outpatient", city: "Los Angeles" },
-  { name: "Northwestern Medicine Center", city: "Chicago" },
-  { name: "UCSF Health Plaza", city: "San Francisco" },
-  { name: "Houston Methodist Clinic", city: "Houston" },
-  { name: "Duke Health Center", city: "Durham" },
-];
+function asAppointmentStatus(
+  status: AppointmentStatusValue,
+): AppointmentStatusValue {
+  return status;
+}
 
-async function main() {
-  const plainPassword: string = "12345"; // fixed password
-  const hashedPassword: string = await bcrypt.hash(plainPassword, 10);
-  const { faker } = await import("@faker-js/faker");  // ✅ dynamic import
+function asBillStatus(status: BillStatusValue): BillStatusValue {
+  return status;
+}
+
+async function main(): Promise<void> {
+  const plainPassword = "12345";
+  const hashedPassword = await bcrypt.hash(plainPassword, 10);
+  const { faker } = await import("@faker-js/faker");
+
   let generatedEmailSequence = 1;
 
   const createUniqueEmail = (emailHandle: string, domain: string): string =>
@@ -78,7 +174,6 @@ async function main() {
 
   console.log("🌱 Starting seeding with realistic healthcare data...");
 
-  // Clean existing data
   console.log("🧹 Cleaning existing data...");
   await prisma.appointmentReport.deleteMany();
   await prisma.notification.deleteMany();
@@ -98,7 +193,6 @@ async function main() {
   await prisma.speciality.deleteMany();
   console.log("✅ Database cleaned");
 
-  // ---------- Specialities ----------
   const specialityNames = [
     "Cardiology",
     "Dermatology",
@@ -122,22 +216,30 @@ async function main() {
     skipDuplicates: true,
   });
 
-  const specialityList = await prisma.speciality.findMany();
+  const specialityList = await prisma.speciality.findMany({
+    select: {
+      id: true,
+    },
+  });
+
   console.log(`✅ Created ${specialityList.length} specialities`);
 
-  // ---------- Realistic Clinics ----------
-  const clinics: Clinic[] = [];
+  const clinics: CreatedClinic[] = [];
 
   for (const clinicData of REALISTIC_CLINICS) {
-    const adminIdentity = generatePakistaniIdentity(pickRandom(["male", "female"] as const));
+    const adminIdentity = generatePakistaniIdentity(
+      pickRandom(["male", "female"] as const),
+    );
 
     const admin = await prisma.user.create({
       data: {
         name: `${adminIdentity.fullName}, MD`,
-        email: `admin.${clinicData.city.toLowerCase().replace(/\s/g, '')}@${clinicData.name.split(' ')[0].toLowerCase()}.com`,
+        email: `admin.${clinicData.city.toLowerCase().replace(/\s/g, "")}@${clinicData.name
+          .split(" ")[0]
+          .toLowerCase()}.com`,
         phone: faker.phone.number(),
         isActive: true,
-        role: Role.CLINIC_ADMIN,
+        role: asRole("CLINIC_ADMIN"),
         password: hashedPassword,
         emailVerified: true,
       },
@@ -146,61 +248,75 @@ async function main() {
     const clinic = await prisma.clinic.create({
       data: {
         name: clinicData.name,
-        code: clinicData.name.split(' ').map(w => w[0]).join('').toUpperCase() + faker.string.numeric(3),
-        email: `contact@${clinicData.name.split(' ')[0].toLowerCase()}.com`,
+        code:
+          clinicData.name
+            .split(" ")
+            .map((word) => word[0])
+            .join("")
+            .toUpperCase() + faker.string.numeric(3),
+        email: `contact@${clinicData.name.split(" ")[0].toLowerCase()}.com`,
         phone: faker.phone.number(),
         adminId: admin.id,
       },
+      select: {
+        id: true,
+        name: true,
+      },
     });
 
-    // Each clinic has 3-7 specialties
     const assignedSpecs = faker.helpers.arrayElements(
       specialityList,
-      faker.number.int({ min: 3, max: 7 })
-    );
+      faker.number.int({ min: 3, max: 7 }),
+    ) as SpecialityRef[];
+
     for (const spec of assignedSpecs) {
       await prisma.clinicSpeciality.create({
-        data: { clinicId: clinic.id, specialityId: spec.id },
+        data: {
+          clinicId: clinic.id,
+          specialityId: spec.id,
+        },
       });
     }
 
     clinics.push(clinic);
   }
+
   console.log(`🏥 Created ${clinics.length} realistic clinics`);
 
-  // ---------- Doctors & Receptionists ----------
   let totalDoctors = 0;
   let totalReceptionists = 0;
 
   for (const clinic of clinics) {
-    // 8-15 doctors per clinic
     const doctorCount = faker.number.int({ min: 8, max: 15 });
-    
+
     for (let i = 0; i < doctorCount; i++) {
-      const gender = faker.helpers.arrayElement(['male', 'female'] as const);
+      const gender = faker.helpers.arrayElement(["male", "female"] as const);
       const doctorIdentity = generatePakistaniIdentity(gender);
-      
+
       const doctor = await prisma.user.create({
         data: {
           name: `Dr. ${doctorIdentity.fullName}`,
           email: createUniqueEmail(doctorIdentity.emailHandle, "clinic.com"),
           phone: faker.phone.number(),
-          isActive: faker.datatype.boolean(0.95), // 95% active
-          role: Role.DOCTOR,
+          isActive: faker.datatype.boolean(0.95),
+          role: asRole("DOCTOR"),
           password: hashedPassword,
           emailVerified: true,
         },
       });
 
       const clinicDoctor = await prisma.clinicDoctor.create({
-        data: { clinicId: clinic.id, doctorId: doctor.id },
+        data: {
+          clinicId: clinic.id,
+          doctorId: doctor.id,
+        },
       });
 
-      // Doctors have 1-2 specialties usually
       const specs = faker.helpers.arrayElements(
         specialityList,
-        faker.number.int({ min: 1, max: 2 })
-      );
+        faker.number.int({ min: 1, max: 2 }),
+      ) as SpecialityRef[];
+
       for (const spec of specs) {
         await prisma.clinicDoctorSpeciality.create({
           data: {
@@ -209,14 +325,15 @@ async function main() {
           },
         });
       }
+
       totalDoctors++;
     }
 
-    // 2-5 receptionists per clinic
     const receptionistCount = faker.number.int({ min: 2, max: 5 });
+
     for (let j = 0; j < receptionistCount; j++) {
       const receptionistIdentity = generatePakistaniIdentity(
-        faker.helpers.arrayElement(['male', 'female'] as const)
+        faker.helpers.arrayElement(["male", "female"] as const),
       );
 
       const receptionist = await prisma.user.create({
@@ -225,7 +342,7 @@ async function main() {
           email: createUniqueEmail(receptionistIdentity.emailHandle, "clinic.com"),
           phone: faker.phone.number(),
           isActive: true,
-          role: Role.RECEPTIONIST,
+          role: asRole("RECEPTIONIST"),
           password: hashedPassword,
           emailVerified: true,
         },
@@ -237,74 +354,100 @@ async function main() {
           receptionistId: receptionist.id,
         },
       });
+
       totalReceptionists++;
     }
   }
 
-  console.log(`👨‍⚕️ Created ${totalDoctors} doctors and ${totalReceptionists} receptionists`);
+  console.log(
+    `👨‍⚕️ Created ${totalDoctors} doctors and ${totalReceptionists} receptionists`,
+  );
 
-  // ---------- Realistic Patients with Demographics ----------
   const patientsCount = 300;
-  const patients: User[] = [];
+  const patients: CreatedPatient[] = [];
 
   for (let i = 0; i < patientsCount; i++) {
-    const gender = faker.helpers.arrayElement(['male', 'female'] as const);
-    const age = faker.number.int({ min: 18, max: 85 });
+    const gender = faker.helpers.arrayElement(["male", "female"] as const);
     const patientIdentity = generatePakistaniIdentity(gender);
-    
+
     const patient = await prisma.user.create({
       data: {
         name: patientIdentity.fullName,
         email: createUniqueEmail(patientIdentity.emailHandle, "email.com"),
         phone: faker.phone.number(),
         isActive: true,
-        role: Role.PATIENT,
+        role: asRole("PATIENT"),
         password: hashedPassword,
         emailVerified: true,
       },
+      select: {
+        id: true,
+      },
     });
+
     patients.push(patient);
   }
+
   console.log(`🧍 Created ${patients.length} patients`);
 
-  // ---------- Realistic Appointments, Bills, Payments ----------
-  const allClinics = await prisma.clinic.findMany({ include: { doctors: true } });
+  const allClinics = (await prisma.clinic.findMany({
+    select: {
+      id: true,
+      doctors: {
+        select: {
+          doctorId: true,
+        },
+      },
+    },
+  })) as ClinicWithDoctors[];
+
   let appointmentCount = 0;
   let billCount = 0;
   let paymentCount = 0;
 
-  // Generate 500-800 appointments with realistic patterns
   const totalAppointments = faker.number.int({ min: 500, max: 800 });
 
   for (let i = 0; i < totalAppointments; i++) {
-    const clinic = faker.helpers.arrayElement(allClinics);
-    const doctorLink = faker.helpers.arrayElement(clinic.doctors);
-    if (!doctorLink) continue;
+    const clinic = faker.helpers.arrayElement(allClinics) as ClinicWithDoctors;
+
+    const doctorLink = faker.helpers.arrayElement(
+      clinic.doctors,
+    ) as { doctorId: string } | undefined;
+
+    if (!doctorLink) {
+      continue;
+    }
 
     const doctorId = doctorLink.doctorId;
     const patient = faker.helpers.arrayElement(patients);
 
-    // Realistic appointment times (past 6 months to next 3 months)
-    const appointmentDate = faker.date.between({ 
-      from: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000), // 6 months ago
-      to: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)    // 3 months ahead
+    const appointmentDate = faker.date.between({
+      from: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000),
+      to: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     });
-    
-    // Set to business hours (9 AM - 5 PM)
+
     appointmentDate.setHours(faker.number.int({ min: 9, max: 16 }));
     appointmentDate.setMinutes(faker.helpers.arrayElement([0, 15, 30, 45]));
     appointmentDate.setSeconds(0);
+    appointmentDate.setMilliseconds(0);
 
     const endTime = new Date(appointmentDate);
-    endTime.setMinutes(endTime.getMinutes() + faker.helpers.arrayElement([15, 30, 45, 60]));
+    endTime.setMinutes(
+      endTime.getMinutes() + faker.helpers.arrayElement([15, 30, 45, 60]),
+    );
 
-    // Status distribution: 60% completed, 20% scheduled, 10% cancelled, 10% pending
     const statusRoll = Math.random();
-    let status: AppointmentStatus;
-    if (statusRoll < 0.60) status = AppointmentStatus.COMPLETED;
-    else if (statusRoll < 0.80) status = AppointmentStatus.SCHEDULED;
-    else if (statusRoll < 0.90) status = AppointmentStatus.CANCELLED;
-    else status = AppointmentStatus.PENDING;
+    let status: AppointmentStatusValue;
+
+    if (statusRoll < 0.6) {
+      status = asAppointmentStatus("COMPLETED");
+    } else if (statusRoll < 0.8) {
+      status = asAppointmentStatus("SCHEDULED");
+    } else if (statusRoll < 0.9) {
+      status = asAppointmentStatus("CANCELLED");
+    } else {
+      status = asAppointmentStatus("PENDING");
+    }
 
     const appointment = await prisma.appointment.create({
       data: {
@@ -312,7 +455,7 @@ async function main() {
         doctorId,
         patientId: patient.id,
         startTime: appointmentDate,
-        endTime: endTime,
+        endTime,
         status,
         priority: faker.helpers.weightedArrayElement([
           { weight: 0.7, value: "MEDIUM" },
@@ -330,24 +473,51 @@ async function main() {
         ]),
       },
     });
+
     appointmentCount++;
 
-    // Only create bills for completed or scheduled appointments
-    if (status === AppointmentStatus.COMPLETED || status === AppointmentStatus.SCHEDULED) {
-      // Realistic pricing based on appointment type
-      const consultationFee = faker.number.float({ min: 50, max: 300, multipleOf: 5 });
-      const procedureFee = faker.datatype.boolean(0.3) ? faker.number.float({ min: 100, max: 500, multipleOf: 10 }) : 0;
-      const labFee = faker.datatype.boolean(0.4) ? faker.number.float({ min: 50, max: 200, multipleOf: 5 }) : 0;
-      
-      const totalAmount = consultationFee + procedureFee + labFee;
-      const discount = faker.datatype.boolean(0.3) ? faker.number.float({ min: 10, max: 100, multipleOf: 5 }) : 0;
+    if (status === "COMPLETED" || status === "SCHEDULED") {
+      const consultationFee = faker.number.float({
+        min: 50,
+        max: 300,
+        multipleOf: 5,
+      });
 
-      const billStatus = status === AppointmentStatus.COMPLETED 
-        ? faker.helpers.weightedArrayElement([
-            { weight: 0.8, value: "PAID" },
-            { weight: 0.2, value: "UNPAID" },
-          ])
-        : "UNPAID";
+      const procedureFee = faker.datatype.boolean(0.3)
+        ? faker.number.float({
+            min: 100,
+            max: 500,
+            multipleOf: 10,
+          })
+        : 0;
+
+      const labFee = faker.datatype.boolean(0.4)
+        ? faker.number.float({
+            min: 50,
+            max: 200,
+            multipleOf: 5,
+          })
+        : 0;
+
+      const totalAmount = consultationFee + procedureFee + labFee;
+
+      const discount = faker.datatype.boolean(0.3)
+        ? faker.number.float({
+            min: 10,
+            max: 100,
+            multipleOf: 5,
+          })
+        : 0;
+
+      const billStatus: BillStatusValue =
+        status === "COMPLETED"
+          ? asBillStatus(
+              faker.helpers.weightedArrayElement([
+                { weight: 0.8, value: "PAID" as const },
+                { weight: 0.2, value: "UNPAID" as const },
+              ]),
+            )
+          : asBillStatus("UNPAID");
 
       const bill = await prisma.bill.create({
         data: {
@@ -358,6 +528,7 @@ async function main() {
           patientId: patient.id,
         },
       });
+
       billCount++;
 
       if (bill.status === "PAID") {
@@ -372,6 +543,7 @@ async function main() {
             ]),
           },
         });
+
         paymentCount++;
       }
     }
@@ -380,11 +552,10 @@ async function main() {
   console.log(`📅 Created ${appointmentCount} appointments`);
   console.log(`💵 Created ${billCount} bills and ${paymentCount} payments`);
 
-  // ---------- Realistic Reports ----------
   for (const clinic of clinics) {
     const clinicAppointments = appointmentCount / clinics.length;
     const avgRevenuePerAppointment = 150;
-    
+
     await prisma.report.create({
       data: {
         clinicId: clinic.id,
@@ -393,8 +564,12 @@ async function main() {
           totalAppointments: Math.floor(clinicAppointments),
           completedAppointments: Math.floor(clinicAppointments * 0.6),
           cancelledAppointments: Math.floor(clinicAppointments * 0.1),
-          totalRevenue: Math.floor(clinicAppointments * avgRevenuePerAppointment),
-          outstandingPayments: Math.floor(clinicAppointments * avgRevenuePerAppointment * 0.2),
+          totalRevenue: Math.floor(
+            clinicAppointments * avgRevenuePerAppointment,
+          ),
+          outstandingPayments: Math.floor(
+            clinicAppointments * avgRevenuePerAppointment * 0.2,
+          ),
         },
       },
     });
@@ -402,7 +577,7 @@ async function main() {
 
   console.log("📊 Reports generated");
   console.log("\n✅ Seeding complete with realistic healthcare data!");
-  console.log(`\n📈 Summary:`);
+  console.log("\n📈 Summary:");
   console.log(`   - ${clinics.length} clinics`);
   console.log(`   - ${totalDoctors} doctors`);
   console.log(`   - ${totalReceptionists} receptionists`);
@@ -413,10 +588,10 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
-    console.error(e);
+  .catch((error: unknown) => {
+    console.error(error);
     process.exit(1);
   })
-  .finally(async () => {
+  .finally(async (): Promise<void> => {
     await prisma.$disconnect();
   });
