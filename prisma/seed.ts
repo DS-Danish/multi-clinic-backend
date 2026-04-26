@@ -3,11 +3,50 @@ import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 
-// Realistic healthcare data
-const REALISTIC_PATIENT_NAMES = {
-  male: ["James Smith", "John Johnson", "Robert Williams", "Michael Brown", "William Jones", "David Garcia", "Richard Martinez", "Joseph Rodriguez", "Thomas Davis", "Charles Lopez"],
-  female: ["Mary Johnson", "Patricia Williams", "Jennifer Brown", "Linda Davis", "Elizabeth Miller", "Barbara Wilson", "Susan Moore", "Jessica Taylor", "Sarah Anderson", "Karen Thomas"],
-};
+const PAKISTANI_FIRST_NAMES = {
+  male: ["Muhammad", "Ahmed", "Ali", "Hassan", "Hussain", "Bilal", "Usman", "Hamza", "Abdullah", "Saad", "Fahad", "Talha", "Adeel", "Owais", "Zain"],
+  female: ["Ayesha", "Fatima", "Maryam", "Zainab", "Sana", "Hira", "Iqra", "Mahnoor", "Rabia", "Kiran", "Hafsa", "Laiba", "Noor", "Amna", "Mehwish"],
+} as const;
+
+const PAKISTANI_LAST_NAMES = [
+  "Khan",
+  "Ahmed",
+  "Ali",
+  "Hussain",
+  "Malik",
+  "Sheikh",
+  "Qureshi",
+  "Butt",
+  "Siddiqui",
+  "Raza",
+  "Mirza",
+  "Chaudhry",
+  "Farooq",
+  "Nawaz",
+  "Iqbal",
+] as const;
+
+type SeedGender = keyof typeof PAKISTANI_FIRST_NAMES;
+
+function pickRandom<T>(values: readonly T[]): T {
+  return values[Math.floor(Math.random() * values.length)];
+}
+
+function toEmailPart(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function generatePakistaniIdentity(gender: SeedGender) {
+  const firstName = pickRandom(PAKISTANI_FIRST_NAMES[gender]);
+  const lastName = pickRandom(PAKISTANI_LAST_NAMES);
+
+  return {
+    firstName,
+    lastName,
+    fullName: `${firstName} ${lastName}`,
+    emailHandle: `${toEmailPart(firstName)}.${toEmailPart(lastName)}`,
+  };
+}
 
 const COMMON_CONDITIONS = [
   "Hypertension", "Type 2 Diabetes", "Asthma", "COPD", "Arthritis",
@@ -32,14 +71,24 @@ async function main() {
   const plainPassword: string = "12345"; // fixed password
   const hashedPassword: string = await bcrypt.hash(plainPassword, 10);
   const { faker } = await import("@faker-js/faker");  // ✅ dynamic import
+  let generatedEmailSequence = 1;
+
+  const createUniqueEmail = (emailHandle: string, domain: string): string =>
+    `${emailHandle}.${generatedEmailSequence++}@${domain}`;
+
   console.log("🌱 Starting seeding with realistic healthcare data...");
 
   // Clean existing data
   console.log("🧹 Cleaning existing data...");
+  await prisma.appointmentReport.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.bill.deleteMany();
+  await prisma.medicalRecord.deleteMany();
   await prisma.appointment.deleteMany();
   await prisma.report.deleteMany();
+  await prisma.staffSchedule.deleteMany();
+  await prisma.activationToken.deleteMany();
   await prisma.clinicDoctorSpeciality.deleteMany();
   await prisma.clinicReceptionist.deleteMany();
   await prisma.clinicDoctor.deleteMany();
@@ -80,9 +129,11 @@ async function main() {
   const clinics: Clinic[] = [];
 
   for (const clinicData of REALISTIC_CLINICS) {
+    const adminIdentity = generatePakistaniIdentity(pickRandom(["male", "female"] as const));
+
     const admin = await prisma.user.create({
       data: {
-        name: `${faker.person.firstName()} ${faker.person.lastName()}, MD`,
+        name: `${adminIdentity.fullName}, MD`,
         email: `admin.${clinicData.city.toLowerCase().replace(/\s/g, '')}@${clinicData.name.split(' ')[0].toLowerCase()}.com`,
         phone: faker.phone.number(),
         isActive: true,
@@ -127,13 +178,12 @@ async function main() {
     
     for (let i = 0; i < doctorCount; i++) {
       const gender = faker.helpers.arrayElement(['male', 'female'] as const);
-      const firstName = faker.person.firstName(gender);
-      const lastName = faker.person.lastName();
+      const doctorIdentity = generatePakistaniIdentity(gender);
       
       const doctor = await prisma.user.create({
         data: {
-          name: `Dr. ${firstName} ${lastName}`,
-          email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@clinic.com`,
+          name: `Dr. ${doctorIdentity.fullName}`,
+          email: createUniqueEmail(doctorIdentity.emailHandle, "clinic.com"),
           phone: faker.phone.number(),
           isActive: faker.datatype.boolean(0.95), // 95% active
           role: Role.DOCTOR,
@@ -165,10 +215,14 @@ async function main() {
     // 2-5 receptionists per clinic
     const receptionistCount = faker.number.int({ min: 2, max: 5 });
     for (let j = 0; j < receptionistCount; j++) {
+      const receptionistIdentity = generatePakistaniIdentity(
+        faker.helpers.arrayElement(['male', 'female'] as const)
+      );
+
       const receptionist = await prisma.user.create({
         data: {
-          name: faker.person.fullName(),
-          email: faker.internet.email().toLowerCase(),
+          name: receptionistIdentity.fullName,
+          email: createUniqueEmail(receptionistIdentity.emailHandle, "clinic.com"),
           phone: faker.phone.number(),
           isActive: true,
           role: Role.RECEPTIONIST,
@@ -196,13 +250,12 @@ async function main() {
   for (let i = 0; i < patientsCount; i++) {
     const gender = faker.helpers.arrayElement(['male', 'female'] as const);
     const age = faker.number.int({ min: 18, max: 85 });
-    const firstName = faker.person.firstName(gender);
-    const lastName = faker.person.lastName();
+    const patientIdentity = generatePakistaniIdentity(gender);
     
     const patient = await prisma.user.create({
       data: {
-        name: `${firstName} ${lastName}`,
-        email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${faker.number.int({ min: 1, max: 999 })}@email.com`,
+        name: patientIdentity.fullName,
+        email: createUniqueEmail(patientIdentity.emailHandle, "email.com"),
         phone: faker.phone.number(),
         isActive: true,
         role: Role.PATIENT,
