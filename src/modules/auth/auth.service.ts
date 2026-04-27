@@ -50,7 +50,8 @@ export class AuthService {
       tokenExpiry,
     });
 
-    // Send verification email
+    let verificationEmailSent = true;
+
     try {
       await this.emailService.sendVerificationEmail(
         user.email,
@@ -58,12 +59,17 @@ export class AuthService {
         user.name,
       );
     } catch (error) {
+      verificationEmailSent = false;
       console.error('Failed to send verification email:', error);
-      // Don't fail registration if email fails
     }
 
     return {
-      message: 'User registered successfully. Please check your email to verify your account.',
+      message: verificationEmailSent
+        ? 'User registered successfully. Please check your email to verify your account.'
+        : 'User registered successfully, but we could not send the verification email yet. Please use resend verification to try again.',
+      requiresEmailVerification: true,
+      verificationEmailSent,
+      verificationEmailSentTo: user.email,
       user: {
         id: user.id,
         name: user.name,
@@ -196,6 +202,7 @@ export class AuthService {
     return {
       message: 'Verification email sent successfully. Please check your inbox.',
       success: true,
+      sentTo: user.email,
     };
   }
 }

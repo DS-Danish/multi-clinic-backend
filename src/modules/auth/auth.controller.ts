@@ -25,8 +25,8 @@ export class AuthController {
   }
 
   @Get('verify-email')
-  verifyEmail(@Query('token') token: string) {
-    return this.authService.verifyEmail(token);
+  verifyEmail(@Query() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
   }
 
   @Post('resend-verification')

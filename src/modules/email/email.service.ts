@@ -5,22 +5,59 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class EmailService {
   private transporter: nodemailer.Transporter;
+  private readonly senderEmail: string;
+  private readonly senderDisplay: string;
+  private readonly webAppUrl: string;
+  private readonly mobileVerifyUrl: string;
 
   constructor(private configService: ConfigService) {
+    this.senderEmail =
+      this.configService.get<string>('EMAIL_USER') || 'dsohail402@gmail.com';
+    this.senderDisplay =
+      this.configService.get<string>('EMAIL_FROM') ||
+      `Multi-Clinic System <${this.senderEmail}>`;
+    this.webAppUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+    this.mobileVerifyUrl =
+      this.configService.get<string>('MOBILE_VERIFY_URL') ||
+      'clinicconnect://verify-email';
+
     this.transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
+        user: this.senderEmail,
         pass: this.configService.get<string>('EMAIL_PASSWORD'),
       },
     });
   }
 
+  private buildVerificationUrl(
+    baseUrl: string,
+    params: Record<string, string>,
+  ) {
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const query = Object.entries(params)
+      .map(
+        ([key, value]) =>
+          `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+      )
+      .join('&');
+
+    return `${baseUrl}${separator}${query}`;
+  }
+
   async sendVerificationEmail(email: string, token: string, name: string) {
-    const verificationUrl = `${this.configService.get<string>('FRONTEND_URL')}/verify-email?token=${token}`;
+    const webVerificationUrl = this.buildVerificationUrl(
+      `${this.webAppUrl}/verify-email`,
+      { token, email },
+    );
+    const mobileVerificationUrl = this.buildVerificationUrl(
+      this.mobileVerifyUrl,
+      { token, email },
+    );
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_USER'),
+      from: this.senderDisplay,
       to: email,
       subject: 'Verify Your Email - Multi-Clinic System',
       html: `
@@ -52,12 +89,18 @@ export class EmailService {
             <div class="content">
               <h2>Hello ${name},</h2>
               <p>Thank you for registering with Multi-Clinic System!</p>
-              <p>Please click the button below to verify your email address:</p>
+              <p>Please verify your email address before you sign in.</p>
               <div style="text-align: center;">
-                <a href="${verificationUrl}" class="button">Verify Email</a>
+                <a href="${webVerificationUrl}" class="button">Verify on Web</a>
               </div>
-              <p>Or copy and paste this link into your browser:</p>
-              <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+              <p style="margin-top: 24px;">If you registered from the mobile app, use this deep link instead:</p>
+              <div style="text-align: center;">
+                <a href="${mobileVerificationUrl}" class="button" style="background: #2563eb;">Verify in App</a>
+              </div>
+              <p>Web verification link:</p>
+              <p style="word-break: break-all; color: #666;">${webVerificationUrl}</p>
+              <p>Mobile app verification link:</p>
+              <p style="word-break: break-all; color: #666;">${mobileVerificationUrl}</p>
               <p><strong>This link will expire in 24 hours.</strong></p>
               <p>If you didn't create an account, please ignore this email.</p>
             </div>
@@ -81,7 +124,7 @@ export class EmailService {
 
   async sendWelcomeEmail(email: string, name: string) {
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_USER'),
+      from: this.senderDisplay,
       to: email,
       subject: 'Welcome to Multi-Clinic System',
       html: `
@@ -125,10 +168,10 @@ export class EmailService {
   }
 
   async sendClinicAdminInvitation(email: string, name: string, clinicName: string, temporaryPassword: string) {
-    const loginUrl = `${this.configService.get<string>('FRONTEND_URL')}/login`;
+    const loginUrl = `${this.webAppUrl}/login`;
 
     const mailOptions = {
-      from: this.configService.get<string>('EMAIL_USER'),
+      from: this.senderDisplay,
       to: email,
       subject: `Invitation: Clinic Admin - ${clinicName}`,
       html: `

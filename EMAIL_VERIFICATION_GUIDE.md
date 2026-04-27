@@ -64,8 +64,10 @@ Email verification has been successfully implemented in the multi-clinic backend
 ### Environment Variables (.env)
 ```env
 EMAIL_USER=dsohail402@gmail.com
-EMAIL_PASSWORD=Danish#92925400
+EMAIL_PASSWORD=your-gmail-app-password
+EMAIL_FROM=Multi-Clinic System <dsohail402@gmail.com>
 FRONTEND_URL=http://localhost:3001
+MOBILE_VERIFY_URL=clinicconnect://verify-email
 ```
 
 ### Gmail Setup (Important!)
