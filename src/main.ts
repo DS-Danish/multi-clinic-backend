@@ -11,21 +11,29 @@ async function bootstrap(): Promise<void> {
     bodyParser: true,
   });
 
-  // ✅ Enable CORS for frontend
   app.enableCors({
-    origin: "http://localhost:3001", // your React/Vite frontend
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    origin: [
+      'http://localhost:3001',
+      'http://127.0.0.1:3001',
+      'http://192.168.1.23:3001',
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
-  // ✅ Global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  await app.listen(process.env.PORT || 3000);
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
+
+  await app.listen(Number(process.env.PORT) || 3000, '0.0.0.0');
 }
 
-bootstrap().catch((err) => {
+bootstrap().catch((err: unknown) => {
   console.error('❌ Application failed to start:', err);
   process.exit(1);
 });

@@ -134,6 +134,12 @@ export class AuthService {
     };
   }
 
+  async logout() {
+    return {
+      message: 'Logged out successfully',
+    };
+  }
+
   async verifyEmail(token: string) {
     const user = await this.userService.findByVerificationToken(token);
     

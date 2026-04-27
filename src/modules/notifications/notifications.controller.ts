@@ -1,15 +1,25 @@
-import { Controller, Get, Param } from "@nestjs/common";
-import { PrismaService } from "src/database/prisma.service";
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { NotificationsService } from './notifications.service';
 
-@Controller("notifications")
+@Controller('notifications')
 export class NotificationController {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly notificationsService: NotificationsService) {}
 
-  @Get(":userId")
-  async getUserNotifications(@Param("userId") userId: string) {
-    return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { sentAt: "desc" },
-    });
+  @Post()
+  async createNotification(
+    @Body()
+    body: {
+      userId: string;
+      message: string;
+      appointmentId?: string;
+      type?: string;
+    },
+  ) {
+    return this.notificationsService.sendNotification(body);
+  }
+
+  @Get(':userId')
+  async getUserNotifications(@Param('userId') userId: string) {
+    return this.notificationsService.getUserNotifications(userId);
   }
 }

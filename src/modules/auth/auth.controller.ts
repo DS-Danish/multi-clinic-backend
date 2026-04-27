@@ -18,6 +18,12 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Post('logout')
+  logout() {
+    console.log('Logout API called');
+    return this.authService.logout();
+  }
+
   @Get('verify-email')
   verifyEmail(@Query('token') token: string) {
     return this.authService.verifyEmail(token);
